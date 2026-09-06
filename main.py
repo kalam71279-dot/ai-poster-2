@@ -1,4 +1,5 @@
 import os
+import urllib.parse
 import requests
 from google import genai
 
@@ -14,7 +15,7 @@ def main():
 
     client = genai.Client(api_key=gemini_key)
     
-    # ১. আকর্ষণীয় ক্যাপশন বা পোস্ট টেক্সট জেনারেট করা (আপনার কাঙ্ক্ষিত gemini-3.6-flash মডেল দিয়ে)
+    # ১. আকর্ষণীয় ক্যাপশন বা পোস্ট টেক্সট জেনারেট করা
     text_prompt = (
         "Write a short, highly engaging social media post for American tech professionals "
         "about a useful programming or technology tip. Include relevant, trending hashtags."
@@ -32,72 +33,46 @@ def main():
         print(f"Failed to generate content from Gemini: {e}")
         return
 
-    # ২. এআই দিয়ে ছবি জেনারেট করা (লেটেস্ট ডেভেলপার এপিআই নিয়ম অনুযায়ী generate_content ব্যবহার করে)
-    image_path = "generated_image.png"
-    image_generated = False
+    # ২. টেক্সটের মূল বিষয়ের সাথে মিলিয়ে ডাইনামিক ইমেজ প্রম্পট ও লিংক তৈরি করা
+    # এখানে জেমিনি থেকে পাওয়া লেখার মূল ভাব বা সাধারণ কোডিং থিম ব্যবহার করে এআই ইমেজ লিংক তৈরি হবে
+    image_theme_prompt = (
+        "A modern minimalist tech vector illustration representing software engineering, "
+        "programming tips, clean code, vibrant neon accents, high resolution, social media graphic"
+    )
     
+    encoded_prompt = urllib.parse.quote(image_theme_prompt)
+    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}"
+    print(f"Generated Image URL: {image_url}")
+
+    # ৩. ফেসবুক পেজে ছবি ও টেক্সট একসাথে পোস্ট করা
+    url = f"https://graph.facebook.com/v18.0/{fb_page_id}/photos"
+    payload = {
+        'message': post_content,
+        'url': image_url, # ফেসবুক সরাসরি এই লিংক থেকে ছবি ফেচ করে নেবে
+        'access_token': fb_token
+    }
+
     try:
-        print("Generating image with AI...")
-        image_prompt = (
-            "A clean, modern, minimalist vector illustration representing coding, software engineering, "
-            "and technology, vibrant colors, high quality, social media friendly."
-        )
+        print("Sending photo post to Facebook...")
+        res = requests.post(url, data=payload)
+        result_data = res.json()
         
-        # ডেভেলপার এপিআই নিয়মে image মডেল দিয়ে generate_content কল করা
-        image_response = client.models.generate_content(
-            model='imagen-3.0-generate-002',
-            contents=image_prompt,
-        )
-        
-        # রেসপন্স থেকে ইমেজ বাইট খুঁজে বের করে সেভ করা
-        for part in image_response.parts:
-            if getattr(part, 'inline_data', None):
-                with open(image_path, "wb") as f:
-                    f.write(part.inline_data.data)
-                image_generated = True
-                print("Image generated successfully!")
-                break
+        if res.status_code == 200:
+            print(f"Successfully posted photo to Facebook! Post ID: {result_data.get('id')}")
+        else:
+            print(f"Failed to post photo to Facebook: {result_data}")
+            
+            # ব্যাকআপ পদ্ধতি: কোনো কারণে ফটো পোস্ট ফেইল করলে শুধু টেক্সট পোস্ট করে দেবে
+            fallback_url = f"https://graph.facebook.com/v18.0/{fb_page_id}/feed"
+            fallback_payload = {'message': post_content, 'access_token': fb_token}
+            fallback_res = requests.post(fallback_url, data=fallback_payload)
+            if fallback_res.status_code == 200:
+                print("Fallback successful: Posted as text-only.")
+            else:
+                print(f"Fallback failed: {fallback_res.json()}")
                 
     except Exception as e:
-        print(f"Image generation failed, proceeding with text-only post: {e}")
-
-    # ৩. ফেসবুক পেজে পোস্ট পাঠানো (ছবি থাকলে ফটো পোস্ট, না থাকলে সাধারণ টেক্সট পোস্ট)
-    if image_generated and os.path.exists(image_path):
-        url = f"https://graph.facebook.com/v18.0/{fb_page_id}/photos"
-        payload = {
-            'message': post_content,
-            'access_token': fb_token
-        }
-        files = {
-            'source': open(image_path, 'rb')
-        }
-        try:
-            print("Sending photo post to Facebook...")
-            res = requests.post(url, data=payload, files=files)
-            result_data = res.json()
-            if res.status_code == 200:
-                print(f"Successfully posted photo to Facebook! Post ID: {result_data.get('id')}")
-            else:
-                print(f"Failed to post photo to Facebook: {result_data}")
-        except Exception as e:
-            print(f"HTTP Request failed: {e}")
-    else:
-        # ছবি তৈরি না হলে শুধু টেক্সট পোস্ট করার ব্যাকআপ পদ্ধতি
-        url = f"https://graph.facebook.com/v18.0/{fb_page_id}/feed"
-        payload = {
-            'message': post_content,
-            'access_token': fb_token
-        }
-        try:
-            print("Sending text post to Facebook...")
-            res = requests.post(url, data=payload)
-            result_data = res.json()
-            if res.status_code == 200:
-                print(f"Successfully posted text to Facebook! Post ID: {result_data.get('id')}")
-            else:
-                print(f"Failed to post text to Facebook: {result_data}")
-        except Exception as e:
-            print(f"HTTP Request failed: {e}")
+        print(f"HTTP Request failed: {e}")
 
 if __name__ == "__main__":
     main()
