@@ -1,0 +1,33 @@
+name: AI Facebook Auto Poster 4 Times Daily
+
+on:
+  workflow_dispatch: # ম্যানুয়ালি রান করার অপশন
+  schedule:
+    - cron: '0 13,16,19,22 * * *' # দিনে ৪ বার আমেরিকান পিক আওয়ারে রান হবে (UTC সময় অনুযায়ী)
+
+jobs:
+  post-to-facebook:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          python -m __file__ 2>/dev/null || true
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Python Script
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          FB_ACCESS_TOKEN: ${{ secrets.FB_ACCESS_TOKEN }}
+          FB_PAGE_ID: ${{ secrets.FB_PAGE_ID }}
+        run: |
+          python main.py
