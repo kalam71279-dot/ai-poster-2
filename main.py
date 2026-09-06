@@ -15,40 +15,51 @@ def main():
 
     client = genai.Client(api_key=gemini_key)
     
-    # ১. আকর্ষণীয় ক্যাপশন বা পোস্ট টেক্সট জেনারেট করা
-    text_prompt = (
-        "Write a short, highly engaging social media post for American tech professionals "
-        "about a useful programming or technology tip. Include relevant, trending hashtags."
+    # ১. জেমিনি দিয়ে পোস্টের টেক্সট এবং ছবির জন্য ইউনিক প্রম্পট একসাথে জেনারেট করা
+    prompt_instruction = (
+        "You are a social media manager for tech professionals. "
+        "Create two things separated by '|||':\n"
+        "1. A short, highly engaging social media post about a useful programming or technology tip with trending hashtags.\n"
+        "2. A short, highly specific, and creative visual description (image prompt) for an AI image generator "
+        "that visually represents this exact tip (e.g., specific objects, UI elements, or metaphors, avoid generic text).\n\n"
+        "Format: [Post Text]|||[Image Prompt]"
     )
     
     try:
-        print("Generating post content with AI...")
-        text_response = client.models.generate_content(
+        print("Generating post content and unique image prompt with AI...")
+        response = client.models.generate_content(
             model='gemini-3.6-flash',
-            contents=text_prompt,
+            contents=prompt_instruction,
         )
-        post_content = text_response.text
+        
+        response_text = response.text
+        if "|||" in response_text:
+            post_content, image_prompt = response_text.split("|||", 1)
+            post_content = post_content.strip()
+            image_prompt = image_prompt.strip()
+        else:
+            # ব্যাকআপ যদি সেপারেশন কাজ না করে
+            post_content = response_text
+            image_prompt = "Modern abstract technology and programming concept, vibrant colors, minimalist vector art"
+
         print(f"Generated Content:\n{post_content}\n")
+        print(f"Generated Unique Image Prompt: {image_prompt}\n")
+        
     except Exception as e:
         print(f"Failed to generate content from Gemini: {e}")
         return
 
-    # ২. টেক্সটের মূল বিষয়ের সাথে মিলিয়ে ডাইনামিক ইমেজ প্রম্পট ও লিংক তৈরি করা
-    # এখানে জেমিনি থেকে পাওয়া লেখার মূল ভাব বা সাধারণ কোডিং থিম ব্যবহার করে এআই ইমেজ লিংক তৈরি হবে
-    image_theme_prompt = (
-        "A modern minimalist tech vector illustration representing software engineering, "
-        "programming tips, clean code, vibrant neon accents, high resolution, social media graphic"
-    )
-    
-    encoded_prompt = urllib.parse.quote(image_theme_prompt)
-    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}"
+    # ২. জেমিনির তৈরি করা ইউনিক ইমেজ প্রম্পট দিয়ে ডাইনামিক লিংক তৈরি করা
+    encoded_prompt = urllib.parse.quote(image_prompt)
+    # ছবির ক্যাশ এড়ানোর জন্য শেষে একটি র্যান্ডম সিড বা টাইমস্ট্যাম্প যুক্ত করা যেতে পারে, তবে সাধারণ এনকোড করাই যথেষ্ট
+    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1080&height=1080&nologo=true"
     print(f"Generated Image URL: {image_url}")
 
     # ৩. ফেসবুক পেজে ছবি ও টেক্সট একসাথে পোস্ট করা
     url = f"https://graph.facebook.com/v18.0/{fb_page_id}/photos"
     payload = {
         'message': post_content,
-        'url': image_url, # ফেসবুক সরাসরি এই লিংক থেকে ছবি ফেচ করে নেবে
+        'url': image_url,
         'access_token': fb_token
     }
 
@@ -62,7 +73,7 @@ def main():
         else:
             print(f"Failed to post photo to Facebook: {result_data}")
             
-            # ব্যাকআপ পদ্ধতি: কোনো কারণে ফটো পোস্ট ফেইল করলে শুধু টেক্সট পোস্ট করে দেবে
+            # ব্যাকআপ পদ্ধতি: ফটো পোস্ট ফেইল করলে শুধু টেক্সট পোস্ট করে দেবে
             fallback_url = f"https://graph.facebook.com/v18.0/{fb_page_id}/feed"
             fallback_payload = {'message': post_content, 'access_token': fb_token}
             fallback_res = requests.post(fallback_url, data=fallback_payload)
