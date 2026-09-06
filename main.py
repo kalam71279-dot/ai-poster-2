@@ -1,7 +1,6 @@
 import os
 import requests
 from google import genai
-from google.genai import types
 
 def main():
     # গিটহাব সিক্রেট থেকে ভেরিয়েবল লোড করা
@@ -15,7 +14,7 @@ def main():
 
     client = genai.Client(api_key=gemini_key)
     
-    # ১. আকর্ষণীয় ক্যাপশন বা পোস্ট টেক্সট জেনারেট করা
+    # ১. আকর্ষণীয় ক্যাপশন বা পোস্ট টেক্সট জেনারেট করা (আপনার কাঙ্ক্ষিত gemini-3.6-flash মডেল দিয়ে)
     text_prompt = (
         "Write a short, highly engaging social media post for American tech professionals "
         "about a useful programming or technology tip. Include relevant, trending hashtags."
@@ -33,7 +32,7 @@ def main():
         print(f"Failed to generate content from Gemini: {e}")
         return
 
-    # ২. এআই দিয়ে পোস্টের সাথে মানানসই ছবি জেনারেট করা (Imagen 3 মডেল ব্যবহার করে)
+    # ২. এআই দিয়ে ছবি জেনারেট করা (লেটেস্ট ডেভেলপার এপিআই নিয়ম অনুযায়ী generate_content ব্যবহার করে)
     image_path = "generated_image.png"
     image_generated = False
     
@@ -43,21 +42,22 @@ def main():
             "A clean, modern, minimalist vector illustration representing coding, software engineering, "
             "and technology, vibrant colors, high quality, social media friendly."
         )
-        result = client.models.generate_images(
+        
+        # ডেভেলপার এপিআই নিয়মে image মডেল দিয়ে generate_content কল করা
+        image_response = client.models.generate_content(
             model='imagen-3.0-generate-002',
-            prompt=image_prompt,
-            config=types.GenerateImagesConfig(
-                number_of_images=1,
-                output_mime_type="image/png",
-                aspect_ratio="1:1",
-            )
+            contents=image_prompt,
         )
-        for generated_image in result.generated_images:
-            image_bytes = generated_image.image.image_bytes
-            with open(image_path, "wb") as f:
-                f.write(image_bytes)
-        image_generated = True
-        print("Image generated successfully!")
+        
+        # রেসপন্স থেকে ইমেজ বাইট খুঁজে বের করে সেভ করা
+        for part in image_response.parts:
+            if getattr(part, 'inline_data', None):
+                with open(image_path, "wb") as f:
+                    f.write(part.inline_data.data)
+                image_generated = True
+                print("Image generated successfully!")
+                break
+                
     except Exception as e:
         print(f"Image generation failed, proceeding with text-only post: {e}")
 
@@ -82,7 +82,7 @@ def main():
         except Exception as e:
             print(f"HTTP Request failed: {e}")
     else:
-        # ছবি ছাড়া শুধু টেক্সট পোস্ট করার ব্যাকআপ পদ্ধতি
+        # ছবি তৈরি না হলে শুধু টেক্সট পোস্ট করার ব্যাকআপ পদ্ধতি
         url = f"https://graph.facebook.com/v18.0/{fb_page_id}/feed"
         payload = {
             'message': post_content,
